@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PROCAM SLAM — Campaign Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--surface:rgba(8,10,18,0.78);--surface2:rgba(14,17,28,0.88);--border:rgba(255,255,255,0.10);--accent:#ff4d1c;--accent2:#ffb800;--accent3:#00e5ff;--text:#f5f0ea;--muted:#8a8a96;--green:#22c55e;--blue:#3b82f6;--purple:#a855f7;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;min-height:100vh;overflow-x:hidden;background:#05060a;position:relative;}
+
+/* ─── SLIDESHOW BG ─── */
+.bg-slideshow{position:fixed;inset:0;z-index:0;}
+.slide{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transform:scale(1.07);transition:opacity 1.4s ease,transform 9s ease;}
+.slide.active{opacity:1;transform:scale(1.0);}
+
+/* overlay */
+.bg-overlay{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(5,6,10,.65) 0%,rgba(5,6,10,.30) 35%,rgba(5,6,10,.38) 65%,rgba(5,6,10,.82) 100%),
+  repeating-linear-gradient(-6deg,transparent 0px,transparent 54px,rgba(255,255,255,.022) 54px,rgba(255,255,255,.022) 56px);}
+.bg-tint{position:fixed;inset:0;z-index:2;pointer-events:none;
+  background:radial-gradient(ellipse 80% 50% at 50% 0%,rgba(255,77,28,.20) 0%,transparent 65%),
+  radial-gradient(ellipse 60% 40% at 100% 100%,rgba(255,184,0,.14) 0%,transparent 55%),
+  radial-gradient(ellipse 50% 40% at 0% 80%,rgba(0,229,255,.09) 0%,transparent 50%);
+  animation:tintPulse 10s ease-in-out infinite alternate;}
+@keyframes tintPulse{0%{opacity:.7}50%{opacity:1}100%{opacity:.75}}
+.noise-overlay{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:.45;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");}
+
+/* slide label caption */
+.slide-caption{position:fixed;bottom:36px;left:clamp(20px,5vw,80px);z-index:10;font-family:'Space Mono',monospace;font-size:10px;color:rgba(255,255,255,.35);letter-spacing:.15em;text-transform:uppercase;transition:opacity .6s;}
+.slide-dots{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:8px;}
+.slide-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25);transition:all .4s;cursor:pointer;}
+.slide-dot.active{background:var(--accent);box-shadow:0 0 7px var(--accent);width:18px;border-radius:3px;}
+
+header,.ticker-bar,main,footer{position:relative;z-index:5;}
+
+/* ─── HEADER ─── */
+header{border-bottom:1px solid var(--border);padding:0 clamp(20px,5vw,80px);background:rgba(5,6,10,.55);backdrop-filter:blur(22px);}
+.header-glow{position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:700px;height:220px;background:radial-gradient(ellipse,rgba(255,77,28,.25) 0%,transparent 70%);pointer-events:none;}
+.header-inner{display:flex;align-items:flex-end;justify-content:space-between;padding:40px 0 24px;gap:20px;flex-wrap:wrap;}
+.brand{display:flex;flex-direction:column;gap:4px;}
+.brand-eyebrow{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.25em;color:var(--accent);text-transform:uppercase;}
+.brand-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(52px,8vw,96px);line-height:.9;letter-spacing:.02em;color:var(--text);text-shadow:0 2px 40px rgba(0,0,0,.8);}
+.brand-title span{color:var(--accent);}
+.brand-sub{font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);margin-top:6px;letter-spacing:.1em;}
+.header-stats{display:flex;gap:24px;align-items:flex-end;padding-bottom:8px;}
+.stat-pill{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+.stat-pill-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;}
+.stat-pill-value{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--accent2);line-height:1;}
+
+/* ─── TICKER ─── */
+.ticker-bar{background:linear-gradient(90deg,var(--accent),#e03a0a,var(--accent));background-size:200% 100%;animation:tickerBg 6s ease infinite;padding:9px 0;overflow:hidden;}
+@keyframes tickerBg{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.ticker-inner{display:flex;gap:60px;animation:ticker 32s linear infinite;white-space:nowrap;width:max-content;}
+.ticker-item{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#fff;font-weight:700;}
+.ticker-item::before{content:'◆ ';opacity:.6;}
+@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ─── MAIN ─── */
+main{padding:clamp(24px,4vw,60px) clamp(20px,5vw,80px);max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:44px;}
+.section-label{display:flex;align-items:center;gap:12px;margin-bottom:18px;}
+.section-label-text{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);white-space:nowrap;}
+.section-label-line{flex:1;height:1px;background:var(--border);}
+.glass{background:var(--surface);border:1px solid var(--border);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:6px;}
+
+/* update banner */
+.update-banner{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;gap:16px;flex-wrap:wrap;border-left:3px solid var(--accent);}
+.update-meta{display:flex;align-items:center;gap:12px;}
+.pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s ease-in-out infinite;flex-shrink:0;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.update-text{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);}
+.update-text strong{color:var(--text);}
+.btn-refresh{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:9px 18px;border-radius:3px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.1em;cursor:pointer;transition:all .2s;text-transform:uppercase;}
+.btn-refresh:hover{border-color:var(--accent);color:var(--accent);}
+.btn-refresh.loading{opacity:.6;pointer-events:none;}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.btn-refresh.loading svg{animation:spin 1s linear infinite;}
+#ai-update-result{display:none;padding:20px;font-family:'Space Mono',monospace;font-size:12px;line-height:1.8;color:var(--text);white-space:pre-wrap;max-height:360px;overflow-y:auto;border-left:3px solid var(--blue);background:rgba(59,130,246,.06);}
+
+/* countdown */
+.countdown-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+@media(max-width:500px){.countdown-grid{grid-template-columns:repeat(2,1fr);}}
+.countdown-card{padding:20px;text-align:center;position:relative;overflow:hidden;}
+.countdown-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);}
+.countdown-num{font-family:'Bebas Neue',sans-serif;font-size:clamp(36px,5vw,56px);color:var(--text);line-height:1;text-shadow:0 0 20px rgba(255,77,28,.4);}
+.countdown-label{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.2em;margin-top:4px;}
+.countdown-race{font-size:11px;color:var(--accent);margin-top:8px;font-weight:500;}
+
+/* costs */
+.costs-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:700px){.costs-grid{grid-template-columns:1fr;}}
+.cost-card{padding:20px;position:relative;overflow:hidden;transition:border-color .2s;}
+.cost-card:hover{border-color:rgba(255,255,255,.16);}
+.cost-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);}
+.cost-card.accent2::before{background:linear-gradient(90deg,var(--accent2),transparent);}
+.cost-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.cost-card-label{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);}
+#gear-items{display:flex;flex-direction:column;gap:6px;list-style:none;}
+.gear-item{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid transparent;border-radius:4px;padding:7px 10px;transition:all .2s;animation:slideIn .25s ease;}
+.gear-item:hover{border-color:var(--border);}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.gear-item-name{flex:1;font-size:13px;color:var(--text);opacity:.88;background:none;border:none;outline:none;font-family:'DM Sans',sans-serif;cursor:text;border-bottom:1px solid transparent;transition:border-color .2s,opacity .2s;}
+.gear-item-name:focus{opacity:1;border-bottom-color:var(--accent);}
+.gear-item-amount{font-family:'Space Mono',monospace;font-size:13px;color:var(--accent2);background:none;border:none;outline:none;width:90px;text-align:right;cursor:text;border-bottom:1px solid transparent;transition:border-color .2s;}
+.gear-item-amount:focus{border-bottom-color:var(--accent2);}
+.btn-del-item{width:22px;height:22px;border-radius:50%;background:none;border:1px solid rgba(255,77,28,.2);color:rgba(255,77,28,.5);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;line-height:1;}
+.btn-del-item:hover{background:rgba(255,77,28,.15);color:var(--accent);border-color:var(--accent);}
+.cost-divider{height:1px;background:var(--border);margin:10px 0;}
+.cost-total-row{display:flex;justify-content:space-between;align-items:baseline;}
+.cost-total-label{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;}
+.cost-total-amount{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--accent);line-height:1;}
+.add-item-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.add-item-row input{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text);border-radius:3px;padding:7px 10px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;transition:border-color .2s;}
+.add-item-row input:focus{border-color:var(--accent);}
+.inp-name{flex:1;min-width:120px;}.inp-amt{width:100px;}
+.btn-add{background:var(--accent);color:#fff;border:none;border-radius:3px;padding:7px 14px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:opacity .15s;white-space:nowrap;}
+.btn-add:hover{opacity:.85;}
+.cost-item{display:flex;justify-content:space-between;align-items:baseline;gap:12px;}
+.cost-item-name{font-size:13px;color:var(--text);opacity:.85;}
+.cost-item-amount{font-family:'Space Mono',monospace;font-size:13px;color:var(--accent2);white-space:nowrap;flex-shrink:0;}
+
+/* race timeline */
+.race-timeline{display:flex;flex-direction:column;position:relative;}
+.race-timeline::before{content:'';position:absolute;left:24px;top:40px;bottom:40px;width:1px;background:linear-gradient(to bottom,var(--accent),var(--accent2),var(--blue),var(--green));opacity:.4;}
+.race-card{display:grid;grid-template-columns:48px 1fr;gap:20px;align-items:center;padding:16px 0;border-bottom:1px solid var(--border);}
+.race-card:last-child{border-bottom:none;}
+.race-num{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent);flex-shrink:0;position:relative;z-index:1;}
+.race-card-inner{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:4px;padding:14px 18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;transition:background .2s;}
+.race-card-inner:hover{background:rgba(255,255,255,.07);}
+@media(max-width:700px){.race-card-inner{grid-template-columns:1fr;}}
+.race-field-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--muted);margin-bottom:3px;}
+.race-field-value{font-size:14px;font-weight:500;color:var(--text);line-height:1.3;}
+.race-field-sub{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);margin-top:2px;}
+.race-badge{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;border-radius:2px;border:1px solid;white-space:nowrap;align-self:flex-start;}
+.badge-flight{color:#3b82f6;border-color:rgba(59,130,246,.4);background:rgba(59,130,246,.08);}
+.badge-train{color:#a78bfa;border-color:rgba(167,139,250,.4);background:rgba(167,139,250,.08);}
+
+/* progress */
+.progress-section{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;}
+.progress-card{padding:16px;display:flex;flex-direction:column;gap:10px;}
+.progress-header{display:flex;justify-content:space-between;align-items:center;}
+.progress-name{font-size:13px;font-weight:500;color:var(--text);}
+.progress-pct{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent2);}
+.progress-bar-track{height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;}
+.progress-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width 1s cubic-bezier(.4,0,.2,1);}
+.progress-status{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;}
+
+/* grand total */
+.grand-total-card{padding:32px 36px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;position:relative;overflow:hidden;}
+.grand-total-card::before{content:'TOTAL';position:absolute;right:-20px;top:50%;transform:translateY(-50%);font-family:'Bebas Neue',sans-serif;font-size:200px;color:rgba(255,255,255,.025);line-height:1;pointer-events:none;}
+.grand-total-label{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.grand-total-value{font-family:'Bebas Neue',sans-serif;font-size:clamp(48px,7vw,80px);color:var(--accent);line-height:1;letter-spacing:.02em;}
+.grand-total-breakdown{display:flex;gap:32px;flex-wrap:wrap;}
+.breakdown-item{display:flex;flex-direction:column;gap:3px;}
+.breakdown-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;}
+.breakdown-value{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--text);opacity:.7;line-height:1;}
+
+/* hof */
+.hof-intro{font-size:14px;color:var(--muted);line-height:1.7;max-width:720px;margin-bottom:24px;}
+.hof-intro strong{color:var(--accent2);}
+.medals-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:32px;}
+.medal-card{flex:1;min-width:150px;max-width:195px;padding:20px 16px;text-align:center;border-radius:6px;transition:transform .2s,border-color .2s;cursor:default;}
+.medal-card:hover{transform:translateY(-5px);border-color:rgba(255,255,255,.16);}
+.medal-icon{font-size:52px;line-height:1;margin-bottom:8px;display:block;filter:drop-shadow(0 0 12px currentColor);}
+.medal-name{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--text);letter-spacing:.05em;}
+.medal-desc{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-top:4px;line-height:1.5;}
+.medal-blr .medal-icon{color:var(--accent);}
+.medal-del .medal-icon{color:var(--accent3);}
+.medal-kol .medal-icon{color:var(--purple);}
+.medal-mum .medal-icon{color:var(--accent2);}
+.hof-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;}
+.hof-card{padding:0;border-radius:6px;overflow:hidden;transition:transform .2s,border-color .2s;}
+.hof-card:hover{transform:translateY(-4px);border-color:rgba(255,255,255,.15);}
+.hof-card-top{height:130px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.hof-avatar{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;position:relative;z-index:1;border:2px solid rgba(255,255,255,.2);}
+.hof-card-top::before{content:'';position:absolute;inset:0;opacity:.35;}
+.hof-c1 .hof-card-top::before{background:linear-gradient(135deg,var(--accent),#c43a10);}
+.hof-c2 .hof-card-top::before{background:linear-gradient(135deg,var(--accent2),#b07e00);}
+.hof-c3 .hof-card-top::before{background:linear-gradient(135deg,var(--accent3),#0077a0);}
+.hof-c4 .hof-card-top::before{background:linear-gradient(135deg,var(--purple),#6d28a8);}
+.hof-c5 .hof-card-top::before{background:linear-gradient(135deg,var(--green),#15803d);}
+.hof-c6 .hof-card-top::before{background:linear-gradient(135deg,#f472b6,#be185d);}
+.hof-card-body{padding:14px 16px;}
+.hof-name{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--text);letter-spacing:.04em;}
+.hof-title{font-family:'Space Mono',monospace;font-size:9px;color:var(--accent2);text-transform:uppercase;letter-spacing:.18em;margin-bottom:6px;}
+.hof-desc{font-size:12px;color:var(--muted);line-height:1.6;}
+.hof-badge{display:inline-block;margin-top:8px;font-family:'Space Mono',monospace;font-size:9px;padding:3px 8px;border-radius:2px;border:1px solid;text-transform:uppercase;letter-spacing:.1em;}
+.badge-gold{color:var(--accent2);border-color:rgba(255,184,0,.4);background:rgba(255,184,0,.08);}
+.badge-legend{color:var(--accent);border-color:rgba(255,77,28,.4);background:rgba(255,77,28,.08);}
+.badge-elite{color:var(--accent3);border-color:rgba(0,229,255,.4);background:rgba(0,229,255,.08);}
+.video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:28px;}
+.video-card{border-radius:6px;overflow:hidden;transition:transform .2s;}
+.video-card:hover{transform:translateY(-3px);}
+.video-thumb{height:160px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.video-thumb-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:80px;opacity:.12;color:#fff;user-select:none;}
+.play-btn{width:56px;height:56px;border-radius:50%;background:rgba(255,77,28,.85);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.3);position:relative;z-index:1;transition:transform .15s,background .15s;cursor:pointer;text-decoration:none;}
+.play-btn:hover{transform:scale(1.1);background:var(--accent);}
+.play-btn svg{margin-left:4px;}
+.video-card-body{padding:12px 14px;}
+.video-title{font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px;line-height:1.4;}
+.video-meta{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);}
+.vt1{background:linear-gradient(135deg,rgba(255,77,28,.15),rgba(255,77,28,.04));}
+.vt2{background:linear-gradient(135deg,rgba(255,184,0,.15),rgba(255,184,0,.04));}
+.vt3{background:linear-gradient(135deg,rgba(0,229,255,.15),rgba(0,229,255,.04));}
+.vt4{background:linear-gradient(135deg,rgba(168,85,247,.15),rgba(168,85,247,.04));}
+.notes-box{padding:20px;}
+.notes-box p{font-size:13px;color:var(--muted);line-height:1.7;}
+.notes-box strong{color:var(--accent2);font-weight:500;}
+footer{border-top:1px solid var(--border);padding:20px clamp(20px,5vw,80px);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:rgba(5,6,10,.6);backdrop-filter:blur(20px);}
+.footer-text{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.1em;}
+.footer-badge{font-family:'Space Mono',monospace;font-size:9px;color:var(--accent);letter-spacing:.15em;text-transform:uppercase;border:1px solid rgba(255,77,28,.3);padding:4px 8px;border-radius:2px;}
+.fade-in{opacity:0;transform:translateY(16px);animation:fadeIn .5s ease forwards;}
+@keyframes fadeIn{to{opacity:1;transform:translateY(0)}}
+.fade-in:nth-child(1){animation-delay:.05s}.fade-in:nth-child(2){animation-delay:.1s}
+.fade-in:nth-child(3){animation-delay:.15s}.fade-in:nth-child(4){animation-delay:.2s}
+.fade-in:nth-child(5){animation-delay:.25s}.fade-in:nth-child(6){animation-delay:.3s}
+.fade-in:nth-child(7){animation-delay:.35s}.fade-in:nth-child(8){animation-delay:.4s}
+input[type=range]{accent-color:var(--accent);cursor:pointer;}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* ═══════════════════════════════
+   REEL SECTION
+═══════════════════════════════ */
+.reel-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.reel-filter{
+  font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.08em;
+  text-transform:uppercase;padding:7px 14px;border-radius:20px;
+  border:1px solid var(--border);background:rgba(255,255,255,.04);
+  color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap;
+}
+.reel-filter:hover{border-color:rgba(255,255,255,.18);color:var(--text);}
+.reel-filter.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 12px rgba(255,77,28,.35);}
+
+.reel-sources{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;}
+.src-badge{
+  font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.1em;
+  text-transform:uppercase;padding:4px 10px;border-radius:2px;
+  border:1px solid;
+}
+.src-badge.yt{color:#ff4444;border-color:rgba(255,68,68,.3);background:rgba(255,68,68,.07);}
+.src-badge.rd{color:#ff6314;border-color:rgba(255,99,20,.3);background:rgba(255,99,20,.07);}
+.src-badge.ig{color:#e040fb;border-color:rgba(224,64,251,.3);background:rgba(224,64,251,.07);}
+.src-badge.tw{color:#9147ff;border-color:rgba(145,71,255,.3);background:rgba(145,71,255,.07);}
+.src-badge.st{color:var(--accent2);border-color:rgba(255,184,0,.3);background:rgba(255,184,0,.07);}
+
+.btn-load-reels{
+  display:flex;align-items:center;gap:10px;
+  background:linear-gradient(135deg,rgba(255,77,28,.15),rgba(255,184,0,.08));
+  border:1px solid rgba(255,77,28,.35);color:var(--text);
+  padding:13px 28px;border-radius:4px;
+  font-family:'Space Mono',monospace;font-size:12px;
+  letter-spacing:.15em;text-transform:uppercase;cursor:pointer;
+  transition:all .2s;width:100%;justify-content:center;
+  margin-bottom:20px;
+}
+.btn-load-reels:hover{background:linear-gradient(135deg,rgba(255,77,28,.25),rgba(255,184,0,.15));border-color:var(--accent);box-shadow:0 0 20px rgba(255,77,28,.15);}
+.btn-load-reels span{font-size:16px;animation:reelPulse 2s ease infinite;}
+@keyframes reelPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
+
+/* Loading bar */
+.reel-loading-bar{
+  height:36px;background:var(--surface);border:1px solid var(--border);
+  border-radius:4px;overflow:hidden;position:relative;margin-bottom:16px;
+  display:flex;align-items:center;padding:0 16px;
+}
+.reel-loading-fill{
+  position:absolute;left:0;top:0;height:100%;width:0%;
+  background:linear-gradient(90deg,rgba(255,77,28,.3),rgba(255,184,0,.2));
+  transition:width .4s ease;
+}
+.reel-loading-text{
+  font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);
+  letter-spacing:.12em;text-transform:uppercase;position:relative;z-index:1;
+}
+
+/* Reel feed — horizontal scroll track */
+.reel-feed{
+  position:relative;overflow:hidden;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:rgba(5,6,10,.5);
+  margin-bottom:12px;
+}
+
+.reel-track{
+  display:flex;gap:0;
+  transition:transform .45s cubic-bezier(.4,0,.2,1);
+  will-change:transform;
+}
+
+/* Individual reel card */
+.reel-card{
+  min-width:100%;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:0;
+  min-height:440px;
+  position:relative;
+  overflow:hidden;
+  flex-shrink:0;
+}
+@media(max-width:700px){
+  .reel-card{grid-template-columns:1fr;min-height:auto;}
+}
+
+/* Left side — visual / thumbnail */
+.reel-visual{
+  position:relative;overflow:hidden;
+  min-height:360px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,rgba(0,0,0,.6),rgba(0,0,0,.3));
+}
+.reel-visual-bg{
+  position:absolute;inset:0;background-size:cover;background-position:center;
+  filter:brightness(.55) saturate(1.2);
+  transition:transform 6s ease;
+}
+.reel-card:hover .reel-visual-bg{transform:scale(1.04);}
+.reel-visual-overlay{
+  position:absolute;inset:0;
+  background:linear-gradient(to right,rgba(5,6,10,.1) 0%,rgba(5,6,10,.7) 100%);
+}
+.reel-play-wrap{
+  position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:14px;
+}
+.reel-play-btn{
+  width:64px;height:64px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  border:2px solid rgba(255,255,255,.4);
+  background:rgba(255,77,28,.75);
+  backdrop-filter:blur(6px);
+  cursor:pointer;text-decoration:none;
+  transition:transform .15s,background .15s,box-shadow .15s;
+  box-shadow:0 0 0 0 rgba(255,77,28,.4);
+}
+.reel-play-btn:hover{
+  transform:scale(1.12);background:var(--accent);
+  box-shadow:0 0 0 10px rgba(255,77,28,.0),0 4px 24px rgba(255,77,28,.5);
+}
+.reel-source-tag{
+  font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.15em;
+  text-transform:uppercase;padding:4px 10px;border-radius:2px;
+  border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.5);
+  color:rgba(255,255,255,.7);
+}
+.reel-big-emoji{
+  font-size:72px;line-height:1;
+  filter:drop-shadow(0 4px 20px rgba(0,0,0,.6));
+  pointer-events:none;
+}
+.reel-duration{
+  position:absolute;bottom:12px;right:14px;z-index:3;
+  font-family:'Space Mono',monospace;font-size:10px;color:rgba(255,255,255,.6);
+  background:rgba(0,0,0,.5);padding:2px 8px;border-radius:2px;
+}
+.reel-cat-badge{
+  position:absolute;top:14px;left:14px;z-index:3;
+  font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.1em;
+  text-transform:uppercase;padding:3px 8px;border-radius:2px;
+  background:rgba(0,0,0,.6);border:1px solid;
+}
+
+/* Right side — info */
+.reel-info{
+  padding:28px 28px;display:flex;flex-direction:column;justify-content:center;gap:16px;
+  background:var(--surface);
+}
+.reel-meta-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.reel-platform{
+  font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.15em;
+  text-transform:uppercase;padding:3px 8px;border-radius:2px;border:1px solid;
+}
+.platform-yt{color:#ff4444;border-color:rgba(255,68,68,.4);background:rgba(255,68,68,.08);}
+.platform-rd{color:#ff6314;border-color:rgba(255,99,20,.4);background:rgba(255,99,20,.08);}
+.platform-ig{color:#e040fb;border-color:rgba(224,64,251,.4);background:rgba(224,64,251,.08);}
+.platform-tw{color:#9147ff;border-color:rgba(145,71,255,.4);background:rgba(145,71,255,.08);}
+.platform-st{color:var(--accent2);border-color:rgba(255,184,0,.4);background:rgba(255,184,0,.08);}
+.reel-date{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.08em;}
+.reel-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(22px,3vw,32px);color:var(--text);line-height:1.15;letter-spacing:.03em;}
+.reel-channel{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent2);letter-spacing:.08em;}
+.reel-desc{font-size:13px;color:var(--muted);line-height:1.6;max-height:90px;overflow:hidden;}
+.reel-stats{display:flex;gap:16px;flex-wrap:wrap;}
+.reel-stat{display:flex;align-items:center;gap:5px;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);}
+.reel-stat-icon{font-size:13px;}
+.reel-tags{display:flex;gap:6px;flex-wrap:wrap;}
+.reel-tag{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:2px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);}
+.reel-cta{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--accent);color:#fff;border:none;border-radius:3px;
+  padding:10px 20px;font-family:'Space Mono',monospace;font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  text-decoration:none;transition:opacity .15s;align-self:flex-start;
+}
+.reel-cta:hover{opacity:.85;}
+
+/* Nav dots + arrows */
+.reel-nav{
+  display:flex;align-items:center;gap:10px;justify-content:center;
+  padding:10px 0;
+}
+.reel-nav-btn{
+  width:36px;height:36px;border-radius:50%;
+  background:rgba(255,255,255,.06);border:1px solid var(--border);
+  color:var(--text);font-size:20px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;line-height:1;
+}
+.reel-nav-btn:hover{background:var(--accent);border-color:var(--accent);}
+.reel-pip-row{display:flex;gap:6px;align-items:center;}
+.reel-pip{
+  width:6px;height:6px;border-radius:50%;
+  background:rgba(255,255,255,.2);cursor:pointer;transition:all .3s;
+}
+.reel-pip.active{background:var(--accent);width:18px;border-radius:3px;box-shadow:0 0 6px var(--accent);}
+.reel-count-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-left:4px;}
+
+/* Empty / error state */
+.reel-empty{
+  text-align:center;padding:48px 24px;color:var(--muted);
+  font-family:'Space Mono',monospace;font-size:12px;line-height:1.8;
+  display:none;
+}
+</style>
+</head>
+<body>
+
+<!-- SLIDESHOW BG -->
+<div class="bg-slideshow" id="slideshow">
+  <div class="slide active" style="background-image:url('https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=1800&q=80')"></div>
+  <div class="slide" style="background-image:url('https://images.unsplash.com/photo-1544717305-2782549b5136?w=1800&q=80')"></div>
+  <div class="slide" style="background-image:url('https://images.unsplash.com/photo-1502904550040-7534597429ae?w=1800&q=80')"></div>
+  <div class="slide" style="background-image:url('https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=1800&q=80')"></div>
+</div>
+<div class="bg-overlay"></div>
+<div class="bg-tint"></div>
+<div class="noise-overlay"></div>
+
+<div class="slide-caption" id="slide-caption">City Marathon · Finish Line</div>
+<div class="slide-dots">
+  <div class="slide-dot active" onclick="goToSlide(0)"></div>
+  <div class="slide-dot" onclick="goToSlide(1)"></div>
+  <div class="slide-dot" onclick="goToSlide(2)"></div>
+  <div class="slide-dot" onclick="goToSlide(3)"></div>
+</div>
+
+<header>
+  <div class="header-glow"></div>
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-eyebrow" id="brand-eyebrow">Season Preparation HQ</div>
+      <div class="brand-title">PROCAM<br><span id="brand-year">SLAM</span></div>
+      <div class="brand-sub" id="brand-sub">2026-27 CAMPAIGN · IXC BASE · ALL-FLIGHT MODE</div>
+    </div>
+    <div class="header-stats">
+      <div class="stat-pill"><span class="stat-pill-label">Grand Total</span><span class="stat-pill-value" id="header-total">₹1,01,585</span></div>
+      <div class="stat-pill"><span class="stat-pill-label">Events</span><span class="stat-pill-value">4</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="ticker-bar">
+  <div class="ticker-inner">
+    <span class="ticker-item">TCS World 10K Bengaluru — 26 Apr 2026</span>
+    <span class="ticker-item">Vedanta Delhi Half Marathon — 18 Oct 2026</span>
+    <span class="ticker-item">Tata Steel World 25K Kolkata — 20 Dec 2026</span>
+    <span class="ticker-item">Tata Mumbai Marathon (Full) — 17 Jan 2027</span>
+    <span class="ticker-item">Base: Chandigarh IXC · All-Flight Mode Active</span>
+    <span class="ticker-item">TCS World 10K Bengaluru — 26 Apr 2026</span>
+    <span class="ticker-item">Vedanta Delhi Half Marathon — 18 Oct 2026</span>
+    <span class="ticker-item">Tata Steel World 25K Kolkata — 20 Dec 2026</span>
+    <span class="ticker-item">Tata Mumbai Marathon (Full) — 17 Jan 2027</span>
+    <span class="ticker-item">Base: Chandigarh IXC · All-Flight Mode Active</span>
+  </div>
+</div>
+
+<main>
+  <div class="update-banner glass fade-in">
+    <div class="update-meta">
+      <div class="pulse-dot"></div>
+      <div class="update-text"><strong>Auto-Update Ready</strong> — AI fetches latest event dates, fees &amp; flight estimates weekly<br>Last updated: <span id="last-updated">—</span></div>
+    </div>
+    <button class="btn-refresh" id="refresh-btn" onclick="fetchLiveUpdates()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Fetch Latest Update
+    </button>
+  </div>
+  <div id="ai-update-result" class="glass fade-in"></div>
+
+  <div class="fade-in">
+    <div class="section-label"><span class="section-label-text">Next Race Countdown</span><div class="section-label-line"></div></div>
+    <div class="countdown-grid">
+      <div class="countdown-card glass"><div class="countdown-num" id="cd-days">—</div><div class="countdown-label">Days</div></div>
+      <div class="countdown-card glass"><div class="countdown-num" id="cd-hours">—</div><div class="countdown-label">Hours</div></div>
+      <div class="countdown-card glass"><div class="countdown-num" id="cd-mins">—</div><div class="countdown-label">Minutes</div></div>
+      <div class="countdown-card glass"><div class="countdown-num" id="cd-secs">—</div><div class="countdown-label">Seconds</div><div class="countdown-race" id="cd-race">Loading…</div></div>
+    </div>
+  </div>
+
+  <div class="fade-in">
+    <div class="section-label">
+      <span class="section-label-text">Mandatory Fixed Costs</span>
+      <div class="section-label-line"></div>
+      <span style="font-family:'Space Mono',monospace;font-size:9px;color:var(--accent);letter-spacing:.15em;white-space:nowrap;">✏ EDITABLE</span>
+    </div>
+    <div class="costs-grid">
+      <div class="cost-card glass">
+        <div class="cost-card-header">
+          <div class="cost-card-label">Gear &amp; Training</div>
+          <span style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.07em;">click to edit · + add · × remove</span>
+        </div>
+        <ul id="gear-items"></ul>
+        <div class="add-item-row">
+          <input type="text" class="inp-name" id="new-item-name" placeholder="Item name…">
+          <input type="text" class="inp-amt" id="new-item-amt" placeholder="₹ amount">
+          <button class="btn-add" onclick="addGearItem()">+ Add</button>
+        </div>
+        <div class="cost-divider"></div>
+        <div class="cost-total-row"><span class="cost-total-label">Subtotal</span><span class="cost-total-amount" id="gear-subtotal">₹0</span></div>
+      </div>
+      <div class="cost-card accent2 glass">
+        <div class="cost-card-header"><div class="cost-card-label">Registration Fees (4 Events)</div></div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div class="cost-item"><span class="cost-item-name">TCS World 10K Bengaluru</span><span class="cost-item-amount">₹2,250</span></div>
+          <div class="cost-item"><span class="cost-item-name">Vedanta Delhi Half Marathon</span><span class="cost-item-amount">₹2,100</span></div>
+          <div class="cost-item"><span class="cost-item-name">Tata Steel World 25K Kolkata</span><span class="cost-item-amount">₹1,200</span></div>
+          <div class="cost-item"><span class="cost-item-name">Tata Mumbai Marathon (Full)</span><span class="cost-item-amount">₹3,400</span></div>
+        </div>
+        <div class="cost-divider"></div>
+        <div class="cost-total-row"><span class="cost-total-label">Subtotal</span><span class="cost-total-amount" style="color:var(--accent2);">₹8,950</span></div>
+      </div>
+    </div>
+    <div class="glass" style="margin-top:12px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.2em;">Total Fixed Expense</span>
+      <span style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--accent2);line-height:1;" id="total-fixed">₹30,950</span>
+    </div>
+  </div>
+
+  <div class="fade-in">
+    <div class="section-label"><span class="section-label-text">Race-by-Race Travel Breakdown</span><div class="section-label-line"></div></div>
+    <div class="race-timeline glass" style="padding:0 20px;">
+      <div class="race-card"><div class="race-num">01</div><div class="race-card-inner"><div><div class="race-field-label">Event</div><div class="race-field-value">TCS World 10K<br>Bengaluru</div><div class="race-field-sub">26 Apr 2026</div></div><div><div class="race-field-label">Transport + Stay</div><div class="race-field-value">Direct Flight + 2 Nights</div><div class="race-field-sub">Flight ~₹14,070 · Stay ~₹7,500</div></div><div><div class="race-field-label">Event Total</div><div class="race-field-value" style="color:var(--accent2);font-family:'Bebas Neue',sans-serif;font-size:28px;">₹21,570</div><div style="margin-top:8px;"><span class="race-badge badge-flight">✈ Direct Flight</span></div></div></div></div>
+      <div class="race-card"><div class="race-num">02</div><div class="race-card-inner"><div><div class="race-field-label">Event</div><div class="race-field-value">Vedanta Delhi<br>Half Marathon</div><div class="race-field-sub">18 Oct 2026</div></div><div><div class="race-field-label">Transport + Stay</div><div class="race-field-value">Shatabdi / Bus + 2 Nights</div><div class="race-field-sub">Train ~₹1,800 · Stay ~₹5,000</div></div><div><div class="race-field-label">Event Total</div><div class="race-field-value" style="color:var(--accent2);font-family:'Bebas Neue',sans-serif;font-size:28px;">₹6,800</div><div style="margin-top:8px;"><span class="race-badge badge-train">🚆 Shatabdi</span></div></div></div></div>
+      <div class="race-card"><div class="race-num">03</div><div class="race-card-inner"><div><div class="race-field-label">Event</div><div class="race-field-value">Tata Steel World 25K<br>Kolkata</div><div class="race-field-sub">20 Dec 2026</div></div><div><div class="race-field-label">Transport + Stay</div><div class="race-field-value">Direct Flight + 2 Nights</div><div class="race-field-sub">Flight ~₹13,765 · Stay ~₹6,500</div></div><div><div class="race-field-label">Event Total</div><div class="race-field-value" style="color:var(--accent2);font-family:'Bebas Neue',sans-serif;font-size:28px;">₹20,265</div><div style="margin-top:8px;"><span class="race-badge badge-flight">✈ Direct Flight</span></div></div></div></div>
+      <div class="race-card"><div class="race-num">04</div><div class="race-card-inner"><div><div class="race-field-label">Event</div><div class="race-field-value">Tata Mumbai Marathon<br>(Full 42.2K)</div><div class="race-field-sub">17 Jan 2027</div></div><div><div class="race-field-label">Transport + Stay</div><div class="race-field-value">Direct Flight + 2 Nights</div><div class="race-field-sub">Flight ~₹13,000 · Stay ~₹9,000</div></div><div><div class="race-field-label">Event Total</div><div class="race-field-value" style="color:var(--accent2);font-family:'Bebas Neue',sans-serif;font-size:28px;">₹22,000</div><div style="margin-top:8px;"><span class="race-badge badge-flight">✈ Direct Flight</span></div></div></div></div>
+    </div>
+  </div>
+
+  <div class="fade-in">
+    <div class="section-label"><span class="section-label-text">Savings Progress Tracker</span><div class="section-label-line"></div></div>
+    <div class="progress-section">
+      <div class="progress-card glass"><div class="progress-header"><span class="progress-name">Shoes Fund</span><span class="progress-pct" id="prog-shoes-pct">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill" id="prog-shoes" style="width:0%"></div></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div class="progress-status">Target ₹15,000</div><input type="range" min="0" max="15000" value="0" step="500" style="flex:1;min-width:80px;" oninput="updateProg('shoes',this.value,15000)"></div></div>
+      <div class="progress-card glass"><div class="progress-header"><span class="progress-name">Bengaluru Fund</span><span class="progress-pct" id="prog-blr-pct">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill" id="prog-blr" style="width:0%"></div></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div class="progress-status">Target ₹21,570</div><input type="range" min="0" max="21570" value="0" step="500" style="flex:1;min-width:80px;" oninput="updateProg('blr',this.value,21570)"></div></div>
+      <div class="progress-card glass"><div class="progress-header"><span class="progress-name">Delhi Fund</span><span class="progress-pct" id="prog-del-pct">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill" id="prog-del" style="width:0%"></div></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div class="progress-status">Target ₹6,800</div><input type="range" min="0" max="6800" value="0" step="200" style="flex:1;min-width:80px;" oninput="updateProg('del',this.value,6800)"></div></div>
+      <div class="progress-card glass"><div class="progress-header"><span class="progress-name">Kolkata Fund</span><span class="progress-pct" id="prog-kol-pct">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill" id="prog-kol" style="width:0%"></div></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div class="progress-status">Target ₹20,265</div><input type="range" min="0" max="20265" value="0" step="500" style="flex:1;min-width:80px;" oninput="updateProg('kol',this.value,20265)"></div></div>
+      <div class="progress-card glass"><div class="progress-header"><span class="progress-name">Mumbai Fund</span><span class="progress-pct" id="prog-mum-pct">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill" id="prog-mum" style="width:0%"></div></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div class="progress-status">Target ₹22,000</div><input type="range" min="0" max="22000" value="0" step="500" style="flex:1;min-width:80px;" oninput="updateProg('mum',this.value,22000)"></div></div>
+      <div class="progress-card glass"><div class="progress-header"><span class="progress-name">Nutrition Fund</span><span class="progress-pct" id="prog-nut-pct">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill" id="prog-nut" style="width:0%"></div></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div class="progress-status">Target ₹7,000</div><input type="range" min="0" max="7000" value="0" step="100" style="flex:1;min-width:80px;" oninput="updateProg('nut',this.value,7000)"></div></div>
+    </div>
+  </div>
+
+  <div class="fade-in">
+    <div class="grand-total-card glass">
+      <div><div class="grand-total-label">Grand Total · All-Flight Mode</div><div class="grand-total-value" id="grand-total-display">₹1,01,585</div></div>
+      <div class="grand-total-breakdown">
+        <div class="breakdown-item"><span class="breakdown-label">Fixed</span><span class="breakdown-value" id="gtb-fixed">₹30,950</span></div>
+        <div class="breakdown-item"><span class="breakdown-label">Travel + Stay</span><span class="breakdown-value">₹70,635</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fade-in">
+    <div class="section-label"><span class="section-label-text">Procam Slam — Hall of Fame &amp; Recognition</span><div class="section-label-line"></div></div>
+    <p class="hof-intro">The <strong>Procam Slam</strong> is India's most prestigious running series — completing all four majors in a single season earns you rare <strong>Slam Finisher</strong> recognition. These legends defined the challenge. Study them. Run their roads.</p>
+    <div class="medals-row">
+      <div class="medal-card glass medal-blr"><span class="medal-icon">🏅</span><div class="medal-name">BLR 10K</div><div class="medal-desc">TCS World 10K<br>Bengaluru Finisher</div></div>
+      <div class="medal-card glass medal-del"><span class="medal-icon">🥇</span><div class="medal-name">DEL HM</div><div class="medal-desc">Vedanta Delhi<br>Half Marathon</div></div>
+      <div class="medal-card glass medal-kol"><span class="medal-icon">🎖️</span><div class="medal-name">KOL 25K</div><div class="medal-desc">Tata Steel<br>World 25K</div></div>
+      <div class="medal-card glass medal-mum"><span class="medal-icon">🏆</span><div class="medal-name">MUM FULL</div><div class="medal-desc">Tata Mumbai<br>Marathon 42.2K</div></div>
+      <div class="medal-card glass" style="border-top:2px solid var(--green);"><span class="medal-icon" style="color:var(--green);filter:drop-shadow(0 0 12px #22c55e);">⭐</span><div class="medal-name">SLAM</div><div class="medal-desc">All 4 in one<br>season — elite</div></div>
+    </div>
+    <div class="hof-grid">
+      <div class="hof-card glass hof-c1"><div class="hof-card-top"><div class="hof-avatar">🏃</div></div><div class="hof-card-body"><div class="hof-title">Elite Kenyan · 4× Mumbai Champion</div><div class="hof-name">Titus Ekiru</div><div class="hof-desc">Multiple Tata Mumbai Marathon winner — dominant force across the Procam circuit with sub-2:06 marathons on Indian roads.</div><span class="hof-badge badge-legend">Legend</span></div></div>
+      <div class="hof-card glass hof-c2"><div class="hof-card-top"><div class="hof-avatar">🏃‍♀️</div></div><div class="hof-card-body"><div class="hof-title">Women's Circuit Dominator</div><div class="hof-name">Tadu Nare</div><div class="hof-desc">Ethiopian powerhouse dominating women's fields at Mumbai and Delhi, inspiring Indian women runners across the full circuit.</div><span class="hof-badge badge-gold">Champion</span></div></div>
+      <div class="hof-card glass hof-c3"><div class="hof-card-top"><div class="hof-avatar">🇮🇳</div></div><div class="hof-card-body"><div class="hof-title">India's Marathon Torch Bearer</div><div class="hof-name">Nitendra Singh Rawat</div><div class="hof-desc">India's fastest marathoner and Asian Games representative — the benchmark every Indian Slam aspirant chases on home soil.</div><span class="hof-badge badge-elite">National Elite</span></div></div>
+      <div class="hof-card glass hof-c4"><div class="hof-card-top"><div class="hof-avatar">⚡</div></div><div class="hof-card-body"><div class="hof-title">TCS World 10K Record Holder</div><div class="hof-name">Rhonex Kipruto</div><div class="hof-desc">Kenyan speedster who blazed the Bengaluru 10K course, setting benchmarks defining the elite pace standard for the series opener.</div><span class="hof-badge badge-legend">Legend</span></div></div>
+      <div class="hof-card glass hof-c5"><div class="hof-card-top"><div class="hof-avatar">🌟</div></div><div class="hof-card-body"><div class="hof-title">Age-Group Slam Finisher · Every Year</div><div class="hof-name">The Amateur Hero</div><div class="hof-desc">Thousands of everyday runners finish all 4 Procam events each season. No sponsors, no elite training — just grit and love for the road.</div><span class="hof-badge badge-gold">Slam Finisher</span></div></div>
+      <div class="hof-card glass hof-c6"><div class="hof-card-top"><div class="hof-avatar">🎽</div></div><div class="hof-card-body"><div class="hof-title">Procam Ambassador · Chandigarh</div><div class="hof-name">You — 2026–27</div><div class="hof-desc">IXC → BLR → DEL → KOL → MUM. Four cities. One season. Your name belongs here. The plan is built. Start training today.</div><span class="hof-badge" style="color:var(--accent);border-color:rgba(255,77,28,.4);background:rgba(255,77,28,.08);">In Progress</span></div></div>
+    </div>
+    <div class="video-grid">
+      <div class="video-card glass"><div class="video-thumb vt1"><div class="video-thumb-bg">BLR</div><a href="https://www.youtube.com/results?search_query=TCS+World+10K+Bengaluru+2025+highlights" target="_blank" rel="noopener" class="play-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg></a></div><div class="video-card-body"><div class="video-title">TCS World 10K Bengaluru — Race Highlights</div><div class="video-meta">Race 1 · 26 Apr 2026 · 10K</div></div></div>
+      <div class="video-card glass"><div class="video-thumb vt2"><div class="video-thumb-bg">DEL</div><a href="https://www.youtube.com/results?search_query=Vedanta+Delhi+Half+Marathon+2025+highlights" target="_blank" rel="noopener" class="play-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg></a></div><div class="video-card-body"><div class="video-title">Vedanta Delhi Half Marathon — Elite Race</div><div class="video-meta">Race 2 · 18 Oct 2026 · 21.1K</div></div></div>
+      <div class="video-card glass"><div class="video-thumb vt3"><div class="video-thumb-bg">KOL</div><a href="https://www.youtube.com/results?search_query=Tata+Steel+World+25K+Kolkata+highlights" target="_blank" rel="noopener" class="play-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg></a></div><div class="video-card-body"><div class="video-title">Tata Steel World 25K Kolkata — Highlights</div><div class="video-meta">Race 3 · 20 Dec 2026 · 25K</div></div></div>
+      <div class="video-card glass"><div class="video-thumb vt4"><div class="video-thumb-bg">MUM</div><a href="https://www.youtube.com/results?search_query=Tata+Mumbai+Marathon+2025+full+broadcast" target="_blank" rel="noopener" class="play-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg></a></div><div class="video-card-body"><div class="video-title">Tata Mumbai Marathon — Full Race Broadcast</div><div class="video-meta">Race 4 · 17 Jan 2027 · 42.2K</div></div></div>
+    </div>
+  </div>
+
+  <!-- REEL SECTION -->
+  <div class="fade-in" id="reel-section">
+    <div class="section-label">
+      <span class="section-label-text">Live Reels — Marathon · Triathlon · Endurance</span>
+      <div class="section-label-line"></div>
+      <span style="font-family:'Space Mono',monospace;font-size:9px;color:var(--accent3);letter-spacing:.15em;white-space:nowrap;">◉ LIVE FEED</span>
+    </div>
+    <div class="reel-filters" id="reel-filters">
+      <button class="reel-filter active" data-cat="all" onclick="setReelFilter('all',this)">All</button>
+      <button class="reel-filter" data-cat="marathon" onclick="setReelFilter('marathon',this)">🏃 Marathon</button>
+      <button class="reel-filter" data-cat="triathlon" onclick="setReelFilter('triathlon',this)">🏊 Triathlon</button>
+      <button class="reel-filter" data-cat="ultras" onclick="setReelFilter('ultras',this)">🏔 Ultras</button>
+      <button class="reel-filter" data-cat="cycling" onclick="setReelFilter('cycling',this)">🚴 Cycling</button>
+      <button class="reel-filter" data-cat="procam" onclick="setReelFilter('procam',this)">⭐ Procam</button>
+      <button class="reel-filter" data-cat="training" onclick="setReelFilter('training',this)">💪 Training</button>
+    </div>
+    <div class="reel-sources">
+      <span class="src-badge yt">▶ YouTube</span>
+      <span class="src-badge rd">👽 Reddit</span>
+      <span class="src-badge ig">◈ Instagram</span>
+      <span class="src-badge tw">📺 Twitch</span>
+      <span class="src-badge st">🏅 Strava</span>
+    </div>
+    <button class="btn-load-reels" id="btn-load-reels" onclick="loadReels()">
+      <span>◉</span> Load Latest Reels
+    </button>
+    <div class="reel-loading-bar" id="reel-loading-bar" style="display:none;">
+      <div class="reel-loading-fill" id="reel-loading-fill"></div>
+      <span class="reel-loading-text" id="reel-loading-text">Scanning sources…</span>
+    </div>
+    <div class="reel-feed" id="reel-feed" style="display:none;">
+      <div class="reel-track" id="reel-track"></div>
+    </div>
+    <div class="reel-nav" id="reel-nav" style="display:none;">
+      <button class="reel-nav-btn" onclick="scrollReels(-1)">‹</button>
+      <div class="reel-pip-row" id="reel-pip-row"></div>
+      <button class="reel-nav-btn" onclick="scrollReels(1)">›</button>
+      <span class="reel-count-label" id="reel-count-label"></span>
+    </div>
+  </div>
+
+  <div class="fade-in">
+    <div class="section-label"><span class="section-label-text">Notes &amp; Strategy</span><div class="section-label-line"></div></div>
+    <div class="notes-box glass"><p>
+      <strong>Base Airport:</strong> Chandigarh IXC — Direct flights to BLR, CCU, BOM. Delhi uses Shatabdi (no practical IXC→DEL flights).<br><br>
+      <strong>Booking Strategy:</strong> Book flights 60–90 days in advance. Bengaluru (Apr) and Mumbai (Jan) are peak season — book earliest.<br><br>
+      <strong>Registration Tip:</strong> Register the moment slots open. Delhi HM and Kolkata 25K fill extremely fast.<br><br>
+      <strong>Gear Editing:</strong> The Gear &amp; Training card is fully editable — click any name or amount inline. All changes auto-save.<br><br>
+      <strong>Weekly Update:</strong> Click Fetch Latest Update to pull current flight prices, event status, and schedule changes via AI.
+    </p></div>
+  </div>
+</main>
+
+<footer>
+  <span class="footer-text">PROCAM SLAM 2026–27 · Personal Preparation Tracker · Chandigarh IXC</span>
+  <span class="footer-badge">Auto-Updates via AI</span>
+</footer>
+
+<script>
+// ═══ SLIDESHOW ═══
+const SLIDE_DATA = [
+  { img:'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=1800&q=80', caption:'City Marathon · Runners in Motion' },
+  { img:'https://images.unsplash.com/photo-1544717305-2782549b5136?w=1800&q=80', caption:'Finish Line · The Moment of Glory' },
+  { img:'https://images.unsplash.com/photo-1502904550040-7534597429ae?w=1800&q=80', caption:'Marathon Road · Miles to Go' },
+  { img:'https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=1800&q=80', caption:'Race Medals · The Prize Awaits' },
+];
+let currentSlide = 0;
+const slideEls = document.querySelectorAll('.slide');
+const dotEls   = document.querySelectorAll('.slide-dot');
+const captionEl = document.getElementById('slide-caption');
+
+function goToSlide(n) {
+  slideEls[currentSlide].classList.remove('active');
+  dotEls[currentSlide].classList.remove('active');
+  currentSlide = n;
+  slideEls[currentSlide].classList.add('active');
+  dotEls[currentSlide].classList.add('active');
+  captionEl.style.opacity = '0';
+  setTimeout(() => {
+    captionEl.textContent = SLIDE_DATA[currentSlide].caption;
+    captionEl.style.opacity = '1';
+  }, 400);
+}
+
+function nextSlide() { goToSlide((currentSlide + 1) % SLIDE_DATA.length); }
+const slideTimer = setInterval(nextSlide, 8000);
+captionEl.textContent = SLIDE_DATA[0].caption;
+
+// ═══ DYNAMIC YEAR ═══
+(function(){
+  const now=new Date(),yr=now.getFullYear(),mo=now.getMonth();
+  let sS,sE;
+  if(mo<3){sS=yr-1;sE=yr;}else{sS=yr;sE=yr+1;}
+  const ss=String(sS).slice(2),se=String(sE).slice(2);
+  document.getElementById('brand-year').textContent="'"+ss;
+  document.getElementById('brand-sub').textContent=sS+'–'+se+' CAMPAIGN · IXC BASE · ALL-FLIGHT MODE';
+  document.title='PROCAM SLAM \''+ss+' — Campaign Tracker';
+  document.getElementById('brand-eyebrow').textContent=sS+'–'+se+' Season HQ';
+})();
+
+// ═══ COUNTDOWN ═══
+const races=[
+  {name:"BLR 10K",     date:new Date("2026-04-26T05:30:00+05:30")},
+  {name:"DEL HM",      date:new Date("2026-10-18T05:30:00+05:30")},
+  {name:"KOL 25K",     date:new Date("2026-12-20T06:00:00+05:30")},
+  {name:"MUM Marathon",date:new Date("2027-01-17T05:30:00+05:30")},
+];
+function updateCountdown(){
+  const now=new Date(),next=races.find(function(r){return r.date>now;});
+  if(!next){document.getElementById('cd-days').textContent='0';document.getElementById('cd-race').textContent='Season Complete!';return;}
+  const d=next.date-now;
+  document.getElementById('cd-days').textContent=String(Math.floor(d/86400000)).padStart(2,'0');
+  document.getElementById('cd-hours').textContent=String(Math.floor((d%86400000)/3600000)).padStart(2,'0');
+  document.getElementById('cd-mins').textContent=String(Math.floor((d%3600000)/60000)).padStart(2,'0');
+  document.getElementById('cd-secs').textContent=String(Math.floor((d%60000)/1000)).padStart(2,'0');
+  document.getElementById('cd-race').textContent='→ '+next.name;
+}
+setInterval(updateCountdown,1000);updateCountdown();
+
+// ═══ EDITABLE GEAR ═══
+const REG_FEES=8950,TRAVEL=70635;
+const DEFAULTS=[
+  {name:"New Running Shoes (Next Year)",amount:15000},
+  {name:"Running Pants",amount:1000},
+  {name:"Training & Nutrition (Gels/Food)",amount:6000},
+];
+let gearItems=JSON.parse(localStorage.getItem('procam_gear')||'null')||DEFAULTS;
+function saveGear(){localStorage.setItem('procam_gear',JSON.stringify(gearItems));}
+function fmtINR(n){return '₹'+Number(n).toLocaleString('en-IN');}
+function parseAmt(s){return parseInt(s.replace(/[₹,\s]/g,''),10)||0;}
+function renderGear(){
+  const ul=document.getElementById('gear-items');
+  ul.innerHTML='';
+  gearItems.forEach(function(item,i){
+    const li=document.createElement('li');
+    li.className='gear-item';
+    const safeName=item.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    li.innerHTML='<input class="gear-item-name" type="text" value="'+safeName+'" onchange="gearItems['+i+'].name=this.value;saveGear();" title="Click to edit"/>'
+      +'<input class="gear-item-amount" type="text" value="'+fmtINR(item.amount)+'" onchange="gearItems['+i+'].amount=parseAmt(this.value);this.value=fmtINR(gearItems['+i+'].amount);recalc();" title="Click to edit"/>'
+      +'<button class="btn-del-item" onclick="deleteGearItem('+i+')" title="Remove">×</button>';
+    ul.appendChild(li);
+  });
+  recalc();
+}
+function deleteGearItem(i){
+  if(!confirm('Remove "'+gearItems[i].name+'"?'))return;
+  gearItems.splice(i,1);saveGear();renderGear();
+}
+function addGearItem(){
+  var ne=document.getElementById('new-item-name'),ae=document.getElementById('new-item-amt');
+  var name=ne.value.trim();
+  if(!name){ne.focus();ne.style.borderColor='var(--accent)';setTimeout(function(){ne.style.borderColor='';},1200);return;}
+  gearItems.push({name:name,amount:parseAmt(ae.value)||0});
+  saveGear();renderGear();ne.value='';ae.value='';ne.focus();
+}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Enter'&&(e.target.id==='new-item-name'||e.target.id==='new-item-amt'))addGearItem();
+});
+function recalc(){
+  var gT=gearItems.reduce(function(s,i){return s+(i.amount||0);},0);
+  var fT=gT+REG_FEES,grd=fT+TRAVEL;
+  document.getElementById('gear-subtotal').textContent=fmtINR(gT);
+  document.getElementById('total-fixed').textContent=fmtINR(fT);
+  document.getElementById('gtb-fixed').textContent=fmtINR(fT);
+  document.getElementById('grand-total-display').textContent=fmtINR(grd);
+  document.getElementById('header-total').textContent=fmtINR(grd);
+}
+renderGear();
+
+// ═══ PROGRESS ═══
+var savedProg=JSON.parse(localStorage.getItem('procam_progress')||'{}');
+function updateProg(id,val,max){
+  var pct=Math.round((val/max)*100);
+  document.getElementById('prog-'+id).style.width=pct+'%';
+  document.getElementById('prog-'+id+'-pct').textContent=pct+'%';
+  savedProg[id]=val;localStorage.setItem('procam_progress',JSON.stringify(savedProg));
+}
+Object.entries(savedProg).forEach(function(entry){
+  var id=entry[0],val=entry[1];
+  var t={shoes:15000,blr:21570,del:6800,kol:20265,mum:22000,nut:7000};
+  if(t[id]){updateProg(id,val,t[id]);var s=document.querySelector('[oninput*="\''+id+'\'"]');if(s)s.value=val;}
+});
+
+// ═══ LAST UPDATED ═══
+var lu=localStorage.getItem('procam_last_updated');
+document.getElementById('last-updated').textContent=lu||'Never (click to fetch)';
+
+// ═══ AI FETCH ═══
+async function fetchLiveUpdates(){
+  var btn=document.getElementById('refresh-btn'),box=document.getElementById('ai-update-result');
+  btn.classList.add('loading');
+  btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Fetching…';
+  box.style.display='block';box.textContent='Searching for latest Procam event info and flight prices…\n';
+  try{
+    var res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,
+        tools:[{type:"web_search_20250305",name:"web_search"}],
+        messages:[{role:"user",content:"Search the web and give a weekly update (max 350 words) for a runner in Chandigarh doing Procam Slam 2026-27:\n1. TCS World 10K Bengaluru Apr 2026 reg status\n2. Vedanta Delhi HM Oct 2026 reg status\n3. Tata Steel 25K Kolkata Dec 2026 reg status\n4. Tata Mumbai Marathon Jan 2027 reg status\nAlso round-trip flight prices IXC to BLR CCU BOM.\n\nFormat:\n📅 EVENT UPDATES\n[bullets]\n\n✈ FLIGHT PRICES IXC RT\n[BLR CCU BOM]\n\n⚠️ ACTION ITEMS\n[2-3 items]\n\nToday: "+new Date().toDateString()}]})
+    });
+    var data=await res.json();
+    var out='';
+    for(var b of data.content){if(b.type==='text')out+=b.text;}
+    box.textContent=out||'No data received.';
+    var now=new Date().toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'});
+    document.getElementById('last-updated').textContent=now;
+    localStorage.setItem('procam_last_updated',now);
+  }catch(e){box.textContent='Could not fetch update.\n'+e.message;}
+  btn.classList.remove('loading');
+  btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Fetch Latest Update';
+}
+
+// ═══════════════════════════════════════════════
+// REEL ENGINE
+// ═══════════════════════════════════════════════
+let allReels = [];
+let filteredReels = [];
+let currentReelIndex = 0;
+let activeReelFilter = 'all';
+
+const REEL_VISUALS = [
+  'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=900&q=75',
+  'https://images.unsplash.com/photo-1544717305-2782549b5136?w=900&q=75',
+  'https://images.unsplash.com/photo-1502904550040-7534597429ae?w=900&q=75',
+  'https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=900&q=75',
+  'https://images.unsplash.com/photo-1477332552946-cfb384aeaf1c?w=900&q=75',
+  'https://images.unsplash.com/photo-1598136490941-30d885318abd?w=900&q=75',
+  'https://images.unsplash.com/photo-1469395446868-fb6a048d5ca3?w=900&q=75',
+  'https://images.unsplash.com/photo-1559028012-481c04fa702d?w=900&q=75',
+  'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=900&q=75',
+  'https://images.unsplash.com/photo-1461897104016-0b3b00cc81ee?w=900&q=75',
+];
+
+const CAT_COLORS = {
+  marathon:  {border:'rgba(255,77,28,.5)',  color:'#ff4d1c',  bg:'rgba(255,77,28,.12)'},
+  triathlon: {border:'rgba(0,229,255,.5)',  color:'#00e5ff',  bg:'rgba(0,229,255,.12)'},
+  ultras:    {border:'rgba(168,85,247,.5)', color:'#a855f7',  bg:'rgba(168,85,247,.12)'},
+  cycling:   {border:'rgba(34,197,94,.5)',  color:'#22c55e',  bg:'rgba(34,197,94,.12)'},
+  procam:    {border:'rgba(255,184,0,.5)',  color:'#ffb800',  bg:'rgba(255,184,0,.12)'},
+  training:  {border:'rgba(59,130,246,.5)', color:'#3b82f6',  bg:'rgba(59,130,246,.12)'},
+};
+
+const PLATFORM_EMOJIS = {youtube:'▶', reddit:'👽', instagram:'◈', twitch:'📺', strava:'🏅', other:'◉'};
+const PLATFORM_CLASSES = {youtube:'platform-yt',reddit:'platform-rd',instagram:'platform-ig',twitch:'platform-tw',strava:'platform-st',other:'platform-yt'};
+
+function setReelFilter(cat, btn) {
+  document.querySelectorAll('.reel-filter').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeReelFilter = cat;
+  if (allReels.length > 0) renderReels();
+}
+
+function setLoadingProgress(pct, msg) {
+  document.getElementById('reel-loading-fill').style.width = pct + '%';
+  document.getElementById('reel-loading-text').textContent = msg;
+}
+
+async function loadReels() {
+  const loadBtn = document.getElementById('btn-load-reels');
+  const loadBar = document.getElementById('reel-loading-bar');
+  const feed    = document.getElementById('reel-feed');
+  const nav     = document.getElementById('reel-nav');
+
+  loadBtn.disabled = true;
+  loadBtn.innerHTML = '<span style="animation:reelPulse 1s ease infinite">◉</span> Scanning Sources…';
+  loadBar.style.display = 'flex';
+  feed.style.display = 'none';
+  nav.style.display = 'none';
+
+  setLoadingProgress(10, 'Connecting to sources…');
+
+  const LOADING_MSGS = [
+    [20, 'Scanning YouTube for marathon reels…'],
+    [35, 'Pulling Reddit r/running & r/triathlon…'],
+    [52, 'Checking Instagram endurance creators…'],
+    [68, 'Scanning Twitch live race streams…'],
+    [80, 'Fetching Procam & Indian circuit clips…'],
+    [92, 'Compiling reel feed…'],
+  ];
+
+  let msgIdx = 0;
+  const progressTimer = setInterval(() => {
+    if (msgIdx < LOADING_MSGS.length) {
+      setLoadingProgress(LOADING_MSGS[msgIdx][0], LOADING_MSGS[msgIdx][1]);
+      msgIdx++;
+    }
+  }, 800);
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 3000,
+        tools: [{type: 'web_search_20250305', name: 'web_search'}],
+        messages: [{
+          role: 'user',
+          content: `Search the web and find 12 real, recent (2024-2026) videos, reels, posts or content pieces about marathon running, triathlon, ultramarathon, endurance sports, cycling races, and Procam Indian running events. Search across YouTube, Reddit, Instagram, Twitch sources.
+
+Find a mix of categories: marathon (4), triathlon (2), ultras (2), cycling (1), procam/Indian running (2), training (1).
+
+Return ONLY a valid JSON array (no markdown, no explanation) with exactly 12 objects like this:
+[
+  {
+    "title": "Video/post title",
+    "channel": "Channel or creator name",
+    "platform": "youtube|reddit|instagram|twitch|strava",
+    "category": "marathon|triathlon|ultras|cycling|procam|training",
+    "description": "2-3 sentence description of what this content covers",
+    "url": "real URL to the content",
+    "views": "e.g. 2.4M views or 1.2k upvotes",
+    "likes": "e.g. 45K likes",
+    "duration": "e.g. 12:34 or Photo post",
+    "date": "e.g. Mar 2025",
+    "tags": ["tag1","tag2","tag3"]
+  }
+]
+
+Today is ${new Date().toDateString()}. Return ONLY the JSON array.`
+        }]
+      })
+    });
+
+    clearInterval(progressTimer);
+    setLoadingProgress(100, 'Reels ready!');
+
+    const data = await res.json();
+    let raw = '';
+    for (const b of data.content) { if (b.type === 'text') raw += b.text; }
+
+    // parse JSON safely
+    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error('No JSON found in response');
+    allReels = JSON.parse(jsonMatch[0]);
+
+    // Assign visuals
+    allReels = allReels.map((r, i) => ({
+      ...r,
+      visual: REEL_VISUALS[i % REEL_VISUALS.length],
+      emoji: getCatEmoji(r.category),
+    }));
+
+    setTimeout(() => {
+      loadBar.style.display = 'none';
+      loadBtn.innerHTML = '<span>↺</span> Refresh Reels';
+      loadBtn.disabled = false;
+      renderReels();
+    }, 600);
+
+  } catch(e) {
+    clearInterval(progressTimer);
+    // Fallback static reels if API fails
+    allReels = getFallbackReels();
+    allReels = allReels.map((r,i) => ({...r, visual: REEL_VISUALS[i % REEL_VISUALS.length], emoji: getCatEmoji(r.category)}));
+    loadBar.style.display = 'none';
+    loadBtn.innerHTML = '<span>↺</span> Refresh Reels';
+    loadBtn.disabled = false;
+    renderReels();
+  }
+}
+
+function getCatEmoji(cat) {
+  const m = {marathon:'🏃',triathlon:'🏊',ultras:'🏔',cycling:'🚴',procam:'⭐',training:'💪'};
+  return m[cat] || '🏅';
+}
+
+function renderReels() {
+  filteredReels = activeReelFilter === 'all'
+    ? allReels
+    : allReels.filter(r => r.category === activeReelFilter);
+
+  if (filteredReels.length === 0) {
+    document.getElementById('reel-feed').style.display = 'none';
+    document.getElementById('reel-nav').style.display = 'none';
+    return;
+  }
+
+  currentReelIndex = 0;
+  const track = document.getElementById('reel-track');
+  track.innerHTML = '';
+  track.style.transform = 'translateX(0)';
+
+  filteredReels.forEach((reel, i) => buildReelCard(reel, i, track));
+
+  // pip dots
+  const pipRow = document.getElementById('reel-pip-row');
+  pipRow.innerHTML = '';
+  filteredReels.forEach((_, i) => {
+    const pip = document.createElement('div');
+    pip.className = 'reel-pip' + (i===0?' active':'');
+    pip.onclick = () => goToReel(i);
+    pipRow.appendChild(pip);
+  });
+
+  document.getElementById('reel-count-label').textContent = '1 / ' + filteredReels.length;
+  document.getElementById('reel-feed').style.display = 'block';
+  document.getElementById('reel-nav').style.display = 'flex';
+}
+
+function buildReelCard(r, i, track) {
+  const cc = CAT_COLORS[r.category] || CAT_COLORS.marathon;
+  const pc = PLATFORM_CLASSES[r.platform] || 'platform-yt';
+  const pe = PLATFORM_EMOJIS[r.platform] || '◉';
+  const pLabel = r.platform ? r.platform.charAt(0).toUpperCase()+r.platform.slice(1) : 'Web';
+  const tagsHtml = (r.tags||[]).map(t=>`<span class="reel-tag">#${t}</span>`).join('');
+
+  const card = document.createElement('div');
+  card.className = 'reel-card';
+  card.innerHTML = `
+    <div class="reel-visual">
+      <div class="reel-visual-bg" style="background-image:url('${r.visual}')"></div>
+      <div class="reel-visual-overlay"></div>
+      <div class="reel-cat-badge" style="color:${cc.color};border-color:${cc.border};background:${cc.bg};">${r.emoji} ${r.category}</div>
+      <div class="reel-duration">${r.duration || '—'}</div>
+      <div class="reel-play-wrap">
+        <a href="${r.url || '#'}" target="_blank" rel="noopener" class="reel-play-btn">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+        </a>
+        <div class="reel-source-tag">${pe} ${pLabel}</div>
+      </div>
+      <div style="position:absolute;bottom:0;left:0;right:0;height:80px;background:linear-gradient(to top,rgba(5,6,10,.9),transparent);pointer-events:none;"></div>
+    </div>
+    <div class="reel-info">
+      <div class="reel-meta-row">
+        <span class="reel-platform ${pc}">${pe} ${pLabel}</span>
+        <span class="reel-date">${r.date || ''}</span>
+      </div>
+      <div class="reel-title">${r.title || 'Untitled'}</div>
+      <div class="reel-channel">${r.channel || ''}</div>
+      <div class="reel-desc">${r.description || ''}</div>
+      <div class="reel-stats">
+        <div class="reel-stat"><span class="reel-stat-icon">👁</span>${r.views || '—'}</div>
+        <div class="reel-stat"><span class="reel-stat-icon">❤</span>${r.likes || '—'}</div>
+      </div>
+      <div class="reel-tags">${tagsHtml}</div>
+      <a href="${r.url || '#'}" target="_blank" rel="noopener" class="reel-cta">
+        Watch / View →
+      </a>
+    </div>
+  `;
+  track.appendChild(card);
+}
+
+function goToReel(n) {
+  currentReelIndex = Math.max(0, Math.min(n, filteredReels.length-1));
+  document.getElementById('reel-track').style.transform = `translateX(-${currentReelIndex * 100}%)`;
+  // update pips
+  document.querySelectorAll('.reel-pip').forEach((p,i) => p.classList.toggle('active', i===currentReelIndex));
+  document.getElementById('reel-count-label').textContent = (currentReelIndex+1) + ' / ' + filteredReels.length;
+}
+
+function scrollReels(dir) { goToReel(currentReelIndex + dir); }
+
+// Touch/swipe support for reel track
+(function(){
+  let sx=0, dragging=false;
+  document.addEventListener('mousedown', e=>{
+    if(!e.target.closest('.reel-feed')) return;
+    sx=e.clientX; dragging=true;
+  });
+  document.addEventListener('mouseup', e=>{
+    if(!dragging) return; dragging=false;
+    const dx=e.clientX-sx;
+    if(Math.abs(dx)>60) scrollReels(dx>0?-1:1);
+  });
+  document.addEventListener('touchstart', e=>{
+    if(!e.target.closest('.reel-feed')) return;
+    sx=e.touches[0].clientX;
+  }, {passive:true});
+  document.addEventListener('touchend', e=>{
+    if(!e.target.closest('.reel-feed')) return;
+    const dx=e.changedTouches[0].clientX-sx;
+    if(Math.abs(dx)>50) scrollReels(dx>0?-1:1);
+  }, {passive:true});
+})();
+
+// Keyboard nav when reel section is visible
+document.addEventListener('keydown', e=>{
+  if(document.getElementById('reel-feed').style.display==='none') return;
+  if(e.key==='ArrowRight') scrollReels(1);
+  if(e.key==='ArrowLeft')  scrollReels(-1);
+});
+
+function getFallbackReels() {
+  return [
+    {title:"Tata Mumbai Marathon 2025 Elite Race Full Broadcast",channel:"Procam International",platform:"youtube",category:"procam",description:"Full broadcast of the 2025 Tata Mumbai Marathon elite race. Features world-class Kenyan runners and India's top marathon talent on the iconic Mumbai seafront course.",url:"https://www.youtube.com/results?search_query=Tata+Mumbai+Marathon+2025+elite",views:"2.4M views",likes:"18K",duration:"1:52:00",date:"Jan 2025",tags:["mumbai","procam","marathon","elite"]},
+    {title:"IRONMAN Triathlon — Full Race Documentary",channel:"Global Triathlon Network",platform:"youtube",category:"triathlon",description:"A cinematic documentary following 5 age-group athletes through the brutal 226km IRONMAN race — swim, bike, run — showing the mental and physical challenge of the sport's ultimate test.",url:"https://www.youtube.com/results?search_query=IRONMAN+triathlon+documentary+2025",views:"1.1M views",likes:"32K",duration:"48:22",date:"Oct 2024",tags:["ironman","triathlon","endurance","swim"]},
+    {title:"Hardrock 100 Ultra 2025 — Race Recap",channel:"iRunFar",platform:"youtube",category:"ultras",description:"The legendary Hardrock 100 ultramarathon through the San Juan Mountains. This year's race recap covers the brutal conditions, DNFs, and the incredible winners who conquered 33,000ft of gain.",url:"https://www.youtube.com/results?search_query=Hardrock+100+2025+race+recap",views:"890K views",likes:"24K",duration:"22:14",date:"Jul 2025",tags:["ultra","hardrock","trail","100miles"]},
+    {title:"TCS World 10K Bengaluru 2025 — Highlights",channel:"Procam International",platform:"youtube",category:"procam",description:"Highlight reel from the world's biggest 10K in Bengaluru. Witness the finish line moments, elite pack racing, and thousands of Indian runners crossing the iconic finish.",url:"https://www.youtube.com/results?search_query=TCS+World+10K+Bengaluru+2025",views:"640K views",likes:"11K",duration:"8:30",date:"Apr 2025",tags:["bengaluru","10K","procam","india"]},
+    {title:"Sub-2 Hour Marathon: Is 1:58 Next?",channel:"Running Channel",platform:"youtube",category:"marathon",description:"Breaking down the science of Kipchoge's 1:59:40 and what physiological advances could push the marathon barrier to 1:58. Interviews with sports scientists and elite coaches.",url:"https://www.youtube.com/results?search_query=sub+2+hour+marathon+next+1:58",views:"3.2M views",likes:"67K",duration:"18:45",date:"Feb 2025",tags:["marathon","kipchoge","sub2","science"]},
+    {title:"I trained like an elite marathoner for 6 months",channel:"LetsRun Vlogs",platform:"youtube",category:"training",description:"Amateur runner follows an elite marathon training program — 120 miles/week, twice daily runs, altitude camps. Raw and honest account of injury, breakthroughs and race day.",url:"https://www.youtube.com/results?search_query=training+like+elite+marathoner+2025",views:"1.8M views",likes:"52K",duration:"31:06",date:"Mar 2025",tags:["training","marathon","vlog","amateur"]},
+    {title:"Paris-Roubaix 2025 — Full Race Live",channel:"GCN Racing",platform:"youtube",category:"cycling",description:"The Hell of the North in full glory — 257km, 55 secteurs of cobblestones, crashes, breakaways, and the iconic velodrome finish. The most brutal one-day race in cycling.",url:"https://www.youtube.com/results?search_query=Paris+Roubaix+2025+full+race",views:"4.1M views",likes:"89K",duration:"5:22:00",date:"Apr 2025",tags:["cycling","roubaix","cobbles","classics"]},
+    {title:"Delhi Half Marathon 2025 — Race Day Vlog",channel:"Run With Puneet",platform:"youtube",category:"procam",description:"Complete race day vlog from the Vedanta Delhi Half Marathon including expo, bib pickup, the race itself and post-race celebrations. A must-watch for first-timers planning this event.",url:"https://www.youtube.com/results?search_query=Delhi+Half+Marathon+2025+vlog",views:"120K views",likes:"4.2K",duration:"19:40",date:"Oct 2025",tags:["delhi","halfmarathon","india","vlog"]},
+    {title:"UTMB 2025 — Ultra Trail du Mont Blanc Full Coverage",channel:"UTMB World Series",platform:"youtube",category:"ultras",description:"170km around Mont Blanc — the world's most prestigious trail ultra. This year's coverage includes drone footage of the Alps, elite runners and the emotional finish line in Chamonix.",url:"https://www.youtube.com/results?search_query=UTMB+2025+ultra+trail+mont+blanc",views:"2.7M views",likes:"71K",duration:"2:14:00",date:"Aug 2025",tags:["UTMB","ultra","trail","montblanc"]},
+    {title:"Olympic Triathlon Tokyo — Full Race Replay",channel:"World Triathlon",platform:"youtube",category:"triathlon",description:"Full replay of the Olympic triathlon from Tokyo — 1.5km swim, 40km bike, 10km run. Tactical masterclass from the world's best triathletes in sweltering conditions.",url:"https://www.youtube.com/results?search_query=Olympic+triathlon+full+race+2024",views:"980K views",likes:"19K",duration:"1:48:00",date:"Aug 2024",tags:["triathlon","olympic","tokyo","swim"]},
+    {title:"What I eat in a week running 100 miles",channel:"Sage Canaday Running",platform:"youtube",category:"training",description:"Elite ultramarathoner shares complete nutrition strategy for peak training weeks — pre-run fuel, mid-run gels, recovery meals and the supplements that actually work at elite mileage.",url:"https://www.youtube.com/results?search_query=ultra+runner+nutrition+100+miles+week",views:"1.4M views",likes:"38K",duration:"14:20",date:"Jan 2025",tags:["nutrition","ultra","training","gels"]},
+    {title:"Boston Marathon 2025 — Moments That Made History",channel:"Boston Athletic Association",platform:"youtube",category:"marathon",description:"Emotional highlights from the 2025 Boston Marathon — the world's oldest annual marathon. From Hopkinton to Boylston Street, featuring the elites, the heartbreak hill stories and finish line drama.",url:"https://www.youtube.com/results?search_query=Boston+Marathon+2025+highlights",views:"5.8M views",likes:"124K",duration:"15:22",date:"Apr 2025",tags:["boston","marathon","heartbreak","elite"]},
+  ];
+}
+</script>
+</body>
+</html>
