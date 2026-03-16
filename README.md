@@ -1,0 +1,1 @@
+Hey this is basically a event trakcer type module , im tracking the event date and time with its total cost and stuff of a procam slam marathon event held all over india with its flight tie residence cost and this page udate itself through ai integration and gives the real date and time of each event and changes each year 
